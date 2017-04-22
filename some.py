@@ -1,6 +1,7 @@
 import tensorflow as tf
 import pygame
 import scipy.io as sio
+from scipy import misc
 import numpy as np
 def weights(shape):
     return tf.Variable(tf.random_normal(shape))
@@ -24,56 +25,63 @@ def neural_network_model(data):
 
 inputTheta = sio.loadmat('newX.mat')
 x=inputTheta['X']
-epoch_x = tf.placeholder('float',[None,x.shape[1]])
-epoch_y = tf.placeholder('float')
+epoch_x = tf.placeholder('float32',[None,x.shape[1]])
+epoch_y = tf.placeholder('float32',[None,10])
+def convertToOneHot(trainArray):
+    a=np.array(trainArray,'int32')
+    d=tf.pack(a)
+    return d
+
 
 
 def train_neural_net(x):
     y= np.array(sio.loadmat('newY.mat')['y'])
     xTrain,xTest,yTrain,yTest=splitData(x,y)
     xTrain=np.float32(xTrain)
-    a=np.array(yTrain,'int32')
-    d=tf.pack(a)
-    oneHotYTrain=tf.one_hot(d,10,1.0,0.0)
+   
+    oneHotYTrain=tf.one_hot(convertToOneHot(yTrain),10,1.0,0.0)
+    oneHotYTest=tf.one_hot(convertToOneHot(yTest),10,1.0,0.0)
+    prediction = neural_network_model(epoch_x)    
+    oneHotYTrain=tf.reshape(oneHotYTrain,[2115,10])    
+    oneHotYTest=tf.reshape(oneHotYTest,[529,10])   
 
-    prediction = neural_network_model(xTrain)
-    
-    oneHotYTrain=tf.reshape(oneHotYTrain,[2115,10])
-
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(prediction,oneHotYTrain))
+    print(oneHotYTrain)
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction,labels=epoch_y))
 
     optimizer = tf.train.AdamOptimizer().minimize(cost)
+
     with tf.Session() as sess:
         sess.run(tf.initialize_all_variables())
         hm_epochs = 15
 
-        # for epoch in range(hm_epochs):
-        #     epoch_loss = 0
-        #     for _ in range(int(y.shape[0]/100)):
+        for epoch in range(hm_epochs):
+            epoch_loss = 0
+            for _ in range(int(y.shape[0]/100)):
 
-        #         _, c = sess.run([optimizer, cost], feed_dict= {epoch_x:xTrain, epoch_y:oneHotYTrain.eval()})
-        #         epoch_loss += c
-        #     print('Epoch', epoch, 'UNDERSCORE', _,'loss:',epoch_loss)
+                _, c = sess.run([optimizer, cost], feed_dict= {epoch_x:xTrain, epoch_y:oneHotYTrain.eval()})
+                epoch_loss += c
+            print('Epoch', epoch, 'UNDERSCORE', _,'loss:',epoch_loss)
+        print(prediction.get_shape())
+        print(oneHotYTrain.get_shape())
+        
 
-        correcct = tf.equal(tf.argmax(prediction,1),tf.argmax(oneHotYTrain,1))
-        print(correcct.eval())
+        correcct = tf.equal(tf.argmax(prediction,1),tf.argmax(epoch_y,1))
+        
         accuracy = tf.reduce_mean(tf.cast(correcct,'float'))
-        print(yTest[1])
-        print('Accuracy:', accuracy.eval({epoch_x:xTest,epoch_y:yTest}))
+        print(accuracy)
+        print('Accuracy:', accuracy.eval({epoch_x:xTest,epoch_y:oneHotYTest.eval()}))
+        print(xTest.shape,'-----',oneHotYTest.get_shape(),'--------',prediction,'=====0',yTest.shape)
+        prediction=tf.argmax(prediction,1)
 
+        print (prediction.eval({epoch_x:xTest}))
+        # classification =sess.run(prediction)
+        print(yTest.transpose())
+        print(tf.reduce_mean(tf.cast(tf.equal(yTest,xTest).eval(),'float')).eval())
+        
 
-def splitPredictionData(y):
-    """Split sample data into training set (80%) and testing set (20%)"""
+    #    classification=  epoch_y.eval(feed_dict)
+       # print( 'Actually is ',classification)
 
-    size1 =int(y.shape[0] * 0.8)
-    ytrain = np.zeros((size1,X.shape[1]))
-    for i, v in enumerate(np.random.permutation(len(y))):
-            #print(i, y[v], len(X[v]))
-        try:
-            ytrain[i] = y[v]
-        except:
-            continue
-    return ytrain
 def splitData(X, y):
     """Split sample data into training set (80%) and testing set (20%)"""
 
